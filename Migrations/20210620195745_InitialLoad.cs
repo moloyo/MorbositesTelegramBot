@@ -11,12 +11,12 @@ namespace MorbositesBotApi.Migrations
                 name: "Morbosites",
                 columns: table => new
                 {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    UserId = table.Column<long>(type: "bigint", nullable: false),
-                    Username = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    JoinedOn = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    LastMessageOn = table.Column<DateTime>(type: "datetime2", nullable: true)
+                    Id = table.Column<long>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    UserId = table.Column<long>(type: "INTEGER", nullable: false),
+                    Username = table.Column<string>(type: "TEXT", nullable: true),
+                    JoinedOn = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    LastMessageOn = table.Column<DateTime>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {

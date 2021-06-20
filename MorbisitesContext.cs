@@ -17,7 +17,7 @@ namespace MorbositesBotApi
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseSqlServer(_connectionString);
+            optionsBuilder.UseSqlite(_connectionString);
         }
     }
 }
