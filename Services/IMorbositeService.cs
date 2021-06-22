@@ -7,9 +7,10 @@ namespace MorbositesBotApi.Services
 {
     public interface IMorbositeService
     {
-        Task UpdateLasstMessageForUserAsync(User user);
-        Task<Morbosite> AddMorbositeAsync(User user);
-        Task DeleteMorbositeAsync(User user);
-        Task<IEnumerable<Morbosite>> GetMorbositesAsync();
+        Task UpdateLasstMessageForUserAsync(long chatId, User user);
+        Task<Morbosite> AddMorbositeAsync(long chatId, User user);
+        Task DeleteMorbositeAsync(long chatId, User user);
+        Task<IEnumerable<Morbosite>> GetMorbositesAsync(long chatId);
+        Task<IEnumerable<Morbosite>> GetInactiveMorbositesAsync(long chatId);
     }
 }

@@ -1,10 +1,12 @@
 ﻿using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 
 namespace MorbositesBotApi.Services
 {
@@ -12,20 +14,32 @@ namespace MorbositesBotApi.Services
     {
         private readonly ITelegramBotClient _telegramBotClient;
         private readonly IMorbositeService _morbositeService;
-        private readonly ILogger<BotService> _logger;
+        private readonly IDictionary<string, Func<Message, Task>> _commands;
+        private readonly IDictionary<MessageType, Func<Message, Task>> _messageTypes;
 
-        public BotService(ITelegramBotClient telegramBotClient, IMorbositeService userService, ILogger<BotService> logger)
+        public BotService(ITelegramBotClient telegramBotClient, IMorbositeService userService)
         {
             _telegramBotClient = telegramBotClient;
             _morbositeService = userService;
-            _logger = logger;
+
+            _messageTypes = new Dictionary<MessageType, Func<Message, Task>>()
+            {
+                { MessageType.Text, HandleTextAsync },
+                { MessageType.ChatMembersAdded, HandleChatMembersAddedAsync },
+                { MessageType.ChatMemberLeft, HandleChatMemberLeftAsync }
+            };
+
+            _commands = new Dictionary<string, Func<Message, Task>>()
+            {
+                { "/users", HandleUsersCommandAsync },
+                { "/kickinactive", HandleKickInactiveCommandAsync },
+                { "/help", HandleHelpCommandAsync }
+            };
         }
 
         public async Task StartBotAsync()
         {
             var bot = await _telegramBotClient.GetMeAsync();
-
-            _logger.LogInformation($"Hello {bot.Id} - {bot.Username}");
 
             _telegramBotClient.OnMessage += Bot_OnMessage;
             _telegramBotClient.StartReceiving();
@@ -41,87 +55,14 @@ namespace MorbositesBotApi.Services
         {
             try
             {
-                _logger.LogInformation($"Type: {e.Message.Type}");
-                switch (e.Message.Type)
-                {
-                    case Telegram.Bot.Types.Enums.MessageType.Unknown:
-                        break;
-                    case Telegram.Bot.Types.Enums.MessageType.Text:
-                        await HandleTextAsync(e.Message);
-                        break;
-                    case Telegram.Bot.Types.Enums.MessageType.ChatMembersAdded:
-                        await HandleChatMembersAddedAsync(e.Message);
-                        break;
-                    case Telegram.Bot.Types.Enums.MessageType.ChatMemberLeft:
-                        await HandleChatMemberLeftAsync(e.Message);
-                        break;
-                    #region Unsupported Message Types
-                    //case Telegram.Bot.Types.Enums.MessageType.Photo:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Audio:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Video:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Voice:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Document:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Sticker:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Location:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Contact:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Venue:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Game:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.VideoNote:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Invoice:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.SuccessfulPayment:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.WebsiteConnected:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.ChatTitleChanged:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.ChatPhotoChanged:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.MessagePinned:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.ChatPhotoDeleted:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.GroupCreated:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.SupergroupCreated:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.ChannelCreated:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.MigratedToSupergroup:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.MigratedFromGroup:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Poll:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.Dice:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.MessageAutoDeleteTimerChanged:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.ProximityAlertTriggered:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.VoiceChatScheduled:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.VoiceChatStarted:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.VoiceChatEnded:
-                    //    break;
-                    //case Telegram.Bot.Types.Enums.MessageType.VoiceChatParticipantsInvited:
-                    //    break;
-                    #endregion
-                    default:
-                        break;
-                }
+                if(e.Message.Chat.Id < 0)
+                    if (_messageTypes.TryGetValue(e.Message.Type, out var function))
+                        await function(e.Message);
+                else
+                    await _telegramBotClient.SendTextMessageAsync(
+                        chatId: e.Message.Chat,
+                        text: $"Este bot funciona solo con grupos"
+                    );
             }
             catch (Exception ex)
             {
@@ -130,53 +71,89 @@ namespace MorbositesBotApi.Services
                     text: $"Exception: {ex.Message}"
                 );
             }
-           
+
         }
 
         private async Task HandleTextAsync(Message message)
         {
 
             if (message.Text.StartsWith('/'))
-            {
                 await HandleCommandAsync(message);
-            } else
-            {
-                _logger.LogInformation(
-                    $"Message: {message.Text}" +
-                    Environment.NewLine +
-                    $"From: {message.From.Username}.");
-
-                await _morbositeService.UpdateLasstMessageForUserAsync(message.From);
-            }
+            else
+                await _morbositeService.UpdateLasstMessageForUserAsync(message.Chat.Id, message.From);
         }
 
         private async Task HandleCommandAsync(Message message)
         {
             var command = message.Text.Split()[0];
 
-            switch (command)
-            {
-                case "/users":
-                    await HandleUsersCommandAsync(message);
-                    break;
-                default:
-                    await _telegramBotClient.SendTextMessageAsync(
-                       chatId: message.Chat,
-                       text: $"Command {command} not found!"
-                   );
-                    break;
-            }
+            if (_commands.TryGetValue(command, out var function))
+                await function(message);
+            else
+                await _telegramBotClient.SendTextMessageAsync(
+                    chatId: message.Chat,
+                    text: $"Comando {command} no encontrado!"
+                );
         }
 
         private async Task HandleUsersCommandAsync(Message message)
         {
-            var users = await _morbositeService.GetMorbositesAsync();
+            var users = await _morbositeService.GetMorbositesAsync(message.Chat.Id);
 
-            var usersMessage = string.Join('\n', users.Select(u => $"USERNAME: {u.Username} | INACTIVE: {DateTime.UtcNow.Subtract(u.LastMessageOn ?? u.JoinedOn).Minutes} minutos."));
+            if (users.Any())
+            {
+                var neverActiveUsers = users.Where(u => u.LastMessageOn == default && DateTime.UtcNow.Subtract(u.JoinedOn).TotalDays > 1);
+
+                if (neverActiveUsers.Any())
+                {
+                    await _telegramBotClient.SendTextMessageAsync(
+                        chatId: message.Chat,
+                        text: $"Los siguientes usuarios entraron y nunca hablaron:\n{string.Join('\n', neverActiveUsers.Select(u => u.Username))}"
+                    );
+                }
+
+                var usersMessage = string.Join('\n', users.Select(u => $"USERNAME: {u.Username} | INACTIVE: {DateTime.UtcNow.Subtract(u.LastMessageOn ?? u.JoinedOn).TotalDays.ToString("0")} días."));
+                await _telegramBotClient.SendTextMessageAsync(
+                    chatId: message.Chat,
+                    text: usersMessage
+                );
+            } else
+            {
+                await _telegramBotClient.SendTextMessageAsync(
+                    chatId: message.Chat,
+                    text: "No hay usuarios registrados en la base de datos para este grupo..."
+                );
+            }
+            
+        }
+
+        private async Task HandleKickInactiveCommandAsync(Message message)
+        {
+            var inactiveMorbosites = await _morbositeService.GetInactiveMorbositesAsync(message.Chat.Id);
+
+            foreach (var morbosite in inactiveMorbosites)
+            {
+                await _telegramBotClient.KickChatMemberAsync(
+                   chatId: message.Chat,
+                   userId: morbosite.UserId,
+                   untilDate: DateTime.UtcNow.AddHours(1),
+                   revokeMessages: true
+               );
+
+                await _telegramBotClient.SendTextMessageAsync(
+                    chatId: message.Chat,
+                    text: $"Usuario {morbosite.Username} eliminado"
+                );
+            }
+        }
+
+        private async Task HandleHelpCommandAsync(Message message)
+        {
+            var commands = string.Join('\n', _commands.Keys.OrderBy(k => k));
 
             await _telegramBotClient.SendTextMessageAsync(
                 chatId: message.Chat,
-                text: usersMessage
+                text: $"Comandos disponibles:\n{commands}"
             );
         }
 
@@ -184,20 +161,20 @@ namespace MorbositesBotApi.Services
         {
             await _telegramBotClient.SendTextMessageAsync(
                 chatId: message.Chat,
-                text: $"{message.From.Username} abandonó el grupo!"
+                text: $"{message.From.Username} se unió al grupo!"
             );
 
-            await _morbositeService.DeleteMorbositeAsync(message.From);
+            await _morbositeService.AddMorbositeAsync(message.Chat.Id, message.From);
         }
 
         private async Task HandleChatMemberLeftAsync(Message message)
         {
             await _telegramBotClient.SendTextMessageAsync(
                 chatId: message.Chat,
-                text: $"{message.From.Username} se unió al grupo!"
+                text: $"{message.From.Username} abandonó el grupo!"
             );
 
-            await _morbositeService.AddMorbositeAsync(message.From);
+            await _morbositeService.DeleteMorbositeAsync(message.Chat.Id, message.From);
         }
     }
 }
