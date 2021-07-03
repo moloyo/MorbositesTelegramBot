@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -25,15 +24,20 @@ namespace MorbositesBotApi.Services
             _messageTypes = new Dictionary<MessageType, Func<Message, Task>>()
             {
                 { MessageType.Text, HandleTextAsync },
+                { MessageType.Sticker, HandleMediaAsync },
+                { MessageType.Photo, HandleMediaAsync },
+                { MessageType.Audio, HandleMediaAsync },
                 { MessageType.ChatMembersAdded, HandleChatMembersAddedAsync },
                 { MessageType.ChatMemberLeft, HandleChatMemberLeftAsync }
             };
 
             _commands = new Dictionary<string, Func<Message, Task>>()
             {
+                { "/start", HandleStartCommandAsync },
                 { "/users", HandleUsersCommandAsync },
                 { "/kickinactive", HandleKickInactiveCommandAsync },
-                { "/help", HandleHelpCommandAsync }
+                { "/help", HandleHelpCommandAsync },
+                { "/getchatid", HandleGetChatIdCommandAsync }
             };
         }
 
@@ -51,18 +55,28 @@ namespace MorbositesBotApi.Services
             return Task.CompletedTask;
         }
 
+        public string GetBotState()
+        {
+            return _telegramBotClient.IsReceiving ? "Active" : "Inactive";
+        }
+
         private async void Bot_OnMessage(object sender, MessageEventArgs e)
         {
             try
             {
-                if(e.Message.Chat.Id < 0)
+                if (e.Message.Chat.Id < 0)
+                {
                     if (_messageTypes.TryGetValue(e.Message.Type, out var function))
                         await function(e.Message);
+                }
                 else
+                {
                     await _telegramBotClient.SendTextMessageAsync(
                         chatId: e.Message.Chat,
                         text: $"Este bot funciona solo con grupos"
                     );
+                }
+
             }
             catch (Exception ex)
             {
@@ -76,7 +90,6 @@ namespace MorbositesBotApi.Services
 
         private async Task HandleTextAsync(Message message)
         {
-
             if (message.Text.StartsWith('/'))
                 await HandleCommandAsync(message);
             else
@@ -94,6 +107,14 @@ namespace MorbositesBotApi.Services
                     chatId: message.Chat,
                     text: $"Comando {command} no encontrado!"
                 );
+        }
+
+        private async Task HandleStartCommandAsync(Message message)
+        {
+            await _telegramBotClient.SendTextMessageAsync(
+                chatId: message.Chat,
+                text: "Hola!"
+            );
         }
 
         private async Task HandleUsersCommandAsync(Message message)
@@ -117,14 +138,15 @@ namespace MorbositesBotApi.Services
                     chatId: message.Chat,
                     text: usersMessage
                 );
-            } else
+            }
+            else
             {
                 await _telegramBotClient.SendTextMessageAsync(
                     chatId: message.Chat,
                     text: "No hay usuarios registrados en la base de datos para este grupo..."
                 );
             }
-            
+
         }
 
         private async Task HandleKickInactiveCommandAsync(Message message)
@@ -147,6 +169,14 @@ namespace MorbositesBotApi.Services
             }
         }
 
+        private async Task HandleGetChatIdCommandAsync(Message message)
+        {
+            await _telegramBotClient.SendTextMessageAsync(
+                chatId: message.Chat,
+                text: $"Chat ID: {message.Chat.Id}"
+            );
+        }
+
         private async Task HandleHelpCommandAsync(Message message)
         {
             var commands = string.Join('\n', _commands.Keys.OrderBy(k => k));
@@ -155,6 +185,11 @@ namespace MorbositesBotApi.Services
                 chatId: message.Chat,
                 text: $"Comandos disponibles:\n{commands}"
             );
+        }
+
+        private async Task HandleMediaAsync(Message message)
+        {
+            await _morbositeService.UpdateLasstMessageForUserAsync(message.Chat.Id, message.From);
         }
 
         private async Task HandleChatMembersAddedAsync(Message message)

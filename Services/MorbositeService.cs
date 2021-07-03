@@ -59,12 +59,12 @@ namespace MorbositesBotApi.Services
             await context.SaveChangesAsync();
         }
 
-        public async Task<IEnumerable<Morbosite>> GetMorbositesAsync(long chatId)
+        public async Task<IEnumerable<Morbosite>> GetMorbositesAsync(long? chatId)
         {
             using var context = new MorbisitesContext(_configuration);
 
             return await context.Morbosites
-                .Where(m => m.ChatId == chatId)
+                .Where(m => chatId == default || m.ChatId == chatId)
                 .ToListAsync();
         }
 
@@ -72,7 +72,7 @@ namespace MorbositesBotApi.Services
         {
             var morbosites = await GetMorbositesAsync(chatId);
 
-            return morbosites.Where(u => (DateTime.UtcNow - (u.LastMessageOn ?? u.JoinedOn)).Days > 14);            
+            return morbosites.Where(u => (DateTime.UtcNow.Subtract(u.JoinedOn)).Days > 1 || (DateTime.UtcNow - (u.LastMessageOn ?? u.JoinedOn)).Days > 14);            
         }
     }
 }

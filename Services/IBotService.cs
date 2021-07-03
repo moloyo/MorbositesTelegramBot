@@ -7,5 +7,7 @@ namespace MorbositesBotApi.Services
         Task StartBotAsync();
 
         Task StopBotAsync();
+
+        string GetBotState();
     }
 }

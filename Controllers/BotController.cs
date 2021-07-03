@@ -28,5 +28,12 @@ namespace MorbositesBotApi.Controllers
             await _botService.StopBotAsync();
             return Ok("Bot Stopped");
         }
+
+        [HttpGet]
+        public IActionResult GetState()
+        {
+            var state = _botService.GetBotState();
+            return Ok(state);
+        }
     }
 }
